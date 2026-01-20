@@ -14,24 +14,23 @@ generate_metabo_report <- function(qc_result,
                                    report_dir = NULL,
                                    report_name = NULL,
                                    batch_name = NULL) {
-  
   # --- 1. 参数检查与初始化 ---
   if (is.null(qc_result)) stop("qc_result is required.")
-  
+
   if (is.null(report_dir)) {
     report_dir <- file.path(getwd(), "output")
     dir.create(report_dir, showWarnings = FALSE, recursive = TRUE)
   }
-  
+
   if (is.null(report_name)) {
     report_name <- paste0("Plasmix_Metabo_QC_Report_", format(Sys.Date(), "%Y%m%d"), ".docx")
   }
   output_file <- file.path(report_dir, report_name)
-  
+
   # --- 2. 提取并处理数据 ---
   raw_table <- qc_result$qc_metrics_table
-  meta      <- qc_result$input_meta
-  
+  meta <- qc_result$input_meta
+
   if (is.null(batch_name)) {
     if ("study_id" %in% colnames(meta) && length(unique(meta$study_id)) == 1) {
       batch_name <- unique(meta$study_id)[1]
@@ -39,16 +38,16 @@ generate_metabo_report <- function(qc_result,
       batch_name <- paste0(format(Sys.Date(), "%Y%m%d"), "_data")
     }
   }
-  
+
   # 提取数值 (Only SNR and RC)
-  snr_val    <- raw_table$Value[grep("Signal-to-Noise Ratio", raw_table$Quality_Metrics)]
-  rc_val     <- raw_table$Value[grep("Relative Correlation", raw_table$Quality_Metrics)]
-  
-  val_snr    <- as.numeric(snr_val)
-  val_rc     <- as.numeric(rc_val)
-  
+  snr_val <- raw_table$Value[grep("Signal-to-Noise Ratio", raw_table$Quality_Metrics)]
+  rc_val <- raw_table$Value[grep("Relative Correlation", raw_table$Quality_Metrics)]
+
+  val_snr <- as.numeric(snr_val)
+  val_rc <- as.numeric(rc_val)
+
   # --- 3. 质量判定与格式化 ---
-  
+
   # 3.1 SNR (Target >= 5)
   if (length(val_snr) == 0 || is.na(val_snr)) {
     txt_snr <- "-"
@@ -62,13 +61,14 @@ generate_metabo_report <- function(qc_result,
       pass_snr <- TRUE
     }
   }
-  
+
   # 3.2 RC (Target >= 0.80)
   if (length(val_rc) == 0 || is.na(val_rc)) {
     txt_rc <- "-"
     # pass_rc <- FALSE
   } else {
-    txt_rc <- sprintf("%.3f", val_rc)}
+    txt_rc <- sprintf("%.3f", val_rc)
+  }
   #   if (val_rc < 0.80) {
   #     txt_rc <- paste0(txt_rc, " ↓")
   #     pass_rc <- FALSE
@@ -76,24 +76,24 @@ generate_metabo_report <- function(qc_result,
   #     pass_rc <- TRUE
   #   }
   # }
-  
+
   # 3.3 整体判定 (SNR 通过即可)
   # is_all_pass <- pass_snr && pass_rc
-  is_all_pass <- pass_snr 
+  is_all_pass <- pass_snr
   overall_quality <- ifelse(is_all_pass, "Yes", "No")
-  
+
   # --- 4. 构建表格数据 ---
   cols <- c("样本组", "信噪比", "Pearson相关系数", "是否通过")
-  
+
   # 第一行：推荐标准
   row_std <- c("推荐质量标准", "≥5", "≥0.80", "-")
-  
+
   # 第二行：实际数据
   row_dat <- c(batch_name, txt_snr, txt_rc, overall_quality)
-  
+
   df_rep <- data.frame(rbind(row_std, row_dat), stringsAsFactors = FALSE)
   colnames(df_rep) <- cols
-  
+
   # 创建 Flextable
   ft <- flextable(df_rep) %>%
     theme_box() %>%
@@ -108,72 +108,72 @@ generate_metabo_report <- function(qc_result,
     color(i = 2, j = 2, color = ifelse(grepl("↓", txt_snr), "red", "black")) %>%
     color(i = 2, j = 3, color = ifelse(grepl("↓", txt_rc), "red", "black")) %>%
     color(i = 2, j = 4, color = ifelse(overall_quality == "Yes", "black", "red"))
-  
+
   # --- 5. 文档文本内容 ---
   txt_summary <- "本报告基于多项组学关键质量控制指标，总结了 Plasmix血浆参考物质所生成代谢组数据的质量情况。质量控制流程从用户输入血浆代谢组表达矩阵开始，分别计算外部质控品的信噪比 (Signal-to-Noise Ratio, SNR)、与参考数据集的Pearson相关系数（Pearson correlation coefficient, PCC）及整体质量判断。"
-  
+
   txt_def_title <- "质量控制指标"
   txt_def_1 <- "信噪比（Signal-to-Noise Ratio, SNR）：用于刻画某一检测平台、实验室或批次区分不同生物样本组之间内在代谢谱差异（“信号”）与同一样本组技术重复变异（“噪声”）的能力。"
   txt_def_2 <- "与参考数据集的Pearson相关系数（Pearson correlation coefficient, PCC）：定义为在给定样本对之间，测试数据集中比值型代谢表达水平与对应比值型参考数据集之间的 Pearson 相关系数，用于表征比值表达谱在数值层面的整体一致性趋势。"
-  
+
   txt_refs <- c(
     "1. Zheng Y, et al. Multi-omics data integration using ratio-based quantitative profiling with Quartet reference materials. Nature Biotechnology, 2024.",
     "2. Liu, Y. et al. Harmonizing plasma proteomics data with the sample-to-reference ratio approach. BioRxiv (2026)",
     "3. 上海临床队列组学检测工作指引（征求意见稿）, 2025/11/26"
   )
-  
+
   txt_disclaimer <- "本数据质量报告仅针对所评估的特定数据集提供分析结果，仅供信息参考之用。尽管已尽最大努力确保分析结果的准确性和可靠性，但本报告按“现状（AS IS）”提供，不附带任何形式的明示或暗示担保。报告作者及发布方不对基于本报告内容所采取的任何行动承担责任。本报告中的结论不应被视为对任何产品或流程质量的最终判定，也不应用于关键应用场景、商业决策或法规合规用途，除非经过专业核查和独立验证。"
-  
+
   # --- 6. 生成 Word 文档 ---
-  
+
   if (!is.null(report_template) && file.exists(report_template)) {
     doc <- read_docx(path = report_template)
   } else {
     doc <- read_docx()
   }
-  
+
   doc <- doc %>%
     body_add_par("Plasmix血浆代谢组质量报告", style = "heading 1") %>%
-    body_add_par("", style = "Normal") 
-  
+    body_add_par("", style = "Normal")
+
   doc <- doc %>%
     body_add_par("摘要", style = "heading 2") %>%
     body_add_par(txt_summary, style = "Normal") %>%
     body_add_par("", style = "Normal")
-  
+
   doc <- doc %>%
     body_add_flextable(ft) %>%
     body_add_par("", style = "Normal")
-  
+
   doc <- doc %>%
     body_add_par(txt_def_title, style = "heading 2") %>%
     body_add_par(txt_def_1, style = "Normal") %>%
     body_add_par(txt_def_2, style = "Normal") %>%
     body_add_par("", style = "Normal")
-  
+
   doc <- doc %>%
     body_add_par("参考文献", style = "heading 2")
-  for(ref in txt_refs) {
+  for (ref in txt_refs) {
     doc <- doc %>% body_add_par(ref, style = "Normal")
   }
   doc <- doc %>% body_add_par("", style = "Normal")
-  
+
   doc <- doc %>%
     body_add_par("免责声明", style = "heading 2") %>%
     body_add_par(txt_disclaimer, style = "Normal") %>%
     body_add_break()
-  
+
   # Plots
   doc <- doc %>%
     body_add_par("Signal-to-Noise Ratio", style = "heading 2") %>%
     body_add_gg(value = qc_result$snr_plot, style = "centered", width = 6, height = 5) %>%
     body_add_par("", style = "Normal")
-  
+
   doc <- doc %>%
     body_add_par("Pearson Correlation Coefficient", style = "heading 2") %>%
     body_add_gg(value = qc_result$cor_plot, style = "centered", width = 6, height = 5) %>%
     body_add_par("", style = "Normal")
-  
+
   print(doc, target = output_file)
   message(paste("Metabolomics Report generated successfully at:", output_file))
 }

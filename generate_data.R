@@ -1,15 +1,12 @@
-# 安装必要的包 (如果尚未安装)
-# install.packages(c("usethis", "readr", "dplyr"))
-
 library(usethis)
 library(readr)
 library(dplyr)
 
 # 1. 读取数据 (请确保文件名路径正确)
 # 读取标称特性 (对应 reference_dataset_quali)
-raw_quali <- read_tsv("../nominal_ref_metabolomics.txt") # 你的文件名
+raw_quali <- read_tsv("./nominal_ref_metabolomics.txt") # 你的文件名
 # 读取特性量值 (对应 reference_dataset)
-raw_quant <- read_tsv("../quant_ref_metabolomics.txt") # 你的文件名
+raw_quant <- read_tsv("./quant_ref_metabolomics.txt") # 你的文件名
 
 # 2. 清洗与标准化 reference_dataset_quali (Recall用)
 # 目标列名: platform, sample, peptide_sequence

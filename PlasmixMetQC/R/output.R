@@ -6,32 +6,31 @@
 #' @importFrom utils write.table
 #' @export
 qc_conclusion <- function(exp_path, meta_path, output_dir = NULL, plot = TRUE) {
-  
   # 1. Load the input data
   data_list <- input_data(exp_path, meta_path)
-  
+
   expr_dt <- data_list$expr_dt
-  meta    <- data_list$metadata
-  
+  meta <- data_list$metadata
+
   # 2. Run the QC pipelines
   allmetrics_results <- qc_allmetrics(expr_dt, meta, output_dir, plot)
-  
+
   # 提取结果表
   output_table <- allmetrics_results$output_table
-  
+
   # 3. Save & Output
   if (!is.null(output_dir)) {
     output_dir_final <- file.path(output_dir, "conclusion_table.tsv")
     write.table(output_table, output_dir_final, sep = "\t", row.names = F, quote = F)
   }
-  
+
   final_list <- list(
     qc_metrics_table = output_table,
     snr_plot = allmetrics_results$snr_results$snr_plot,
-    cor_plot = allmetrics_results$cor_results$cor_plot, 
+    cor_plot = allmetrics_results$cor_results$cor_plot,
     detail_results = allmetrics_results,
     input_meta = meta
   )
-  
+
   return(final_list)
 }

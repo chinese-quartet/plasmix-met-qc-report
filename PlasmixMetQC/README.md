@@ -39,7 +39,6 @@ devtools::install_local(".")
 * 第一列必须是 **Feature ID**（列名推荐为 `Feature`，也支持 `Metabolite` 或 `Compound`）。
 * 其余列为样本的定量数据（建议为 Log2 转换后的值）。
 
-
 * **重复处理**：如果存在重复的 Feature ID，程序会自动添加后缀（如 `.1`, `.2`）进行区分。
 
 | Feature | Sample_01 | Sample_02 | Sample_03 | ... |
@@ -54,10 +53,8 @@ devtools::install_local(".")
 * `library`: 必须与表达矩阵的列名（样本ID）完全一致。
 * `sample`: 样本组别名称。必须包含 **P** 样（作为参考分母），以及 **M, Y, X, F** 中的任意组合。
 
-
 * **可选列**：
 * `platform`: 不再强制要求。
-
 
 
 | library | sample |
@@ -130,9 +127,3 @@ generate_metabo_report(
 2. 上海临床队列组学检测工作指引（征求意见稿）, 2025.
 
 ---
-
-**Maintainer**: [Your Name]
-
-```
-
-```
