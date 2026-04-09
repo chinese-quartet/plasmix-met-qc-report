@@ -163,15 +163,56 @@ generate_metabo_report <- function(qc_result,
     body_add_par(txt_disclaimer, style = "Normal") %>%
     body_add_break()
 
+  # # Plots
+  # doc <- doc %>%
+  #   body_add_par("Signal-to-Noise Ratio", style = "heading 2") %>%
+  #   body_add_gg(value = qc_result$snr_plot, style = "centered", width = 6, height = 5) %>%
+  #   body_add_par("", style = "Normal")
+  #
+  # doc <- doc %>%
+  #   body_add_par("Pearson Correlation Coefficient", style = "heading 2") %>%
+  #   body_add_gg(value = qc_result$cor_plot, style = "centered", width = 6, height = 5) %>%
+  #   body_add_par("", style = "Normal")
   # Plots
-  doc <- doc %>%
-    body_add_par("Signal-to-Noise Ratio", style = "heading 2") %>%
-    body_add_gg(value = qc_result$snr_plot, style = "centered", width = 6, height = 5) %>%
-    body_add_par("", style = "Normal")
 
   doc <- doc %>%
-    body_add_par("Pearson Correlation Coefficient", style = "heading 2") %>%
-    body_add_gg(value = qc_result$cor_plot, style = "centered", width = 6, height = 5) %>%
+    body_add_par("Signal-to-Noise Ratio", style = "heading 2")
+
+  if (inherits(qc_result$snr_plot, "gg")) {
+    doc <- doc %>%
+      body_add_gg(value = qc_result$snr_plot, style = "centered", width = 6, height = 5)
+  } else {
+    doc <- doc %>%
+      body_add_par("SNR plot unavailable.", style = "Normal")
+  }
+
+  doc <- doc %>%
+    body_add_par("", style = "Normal") %>%
+    body_add_par("Pearson Correlation Coefficient", style = "heading 2")
+
+  if (inherits(qc_result$cor_plot, "gg")) {
+    doc <- doc %>%
+      body_add_gg(value = qc_result$cor_plot, style = "centered", width = 6, height = 5)
+  } else {
+    cor_text <- NA_character_
+    if (!is.null(raw_table) &&
+      "Quality_Metrics" %in% colnames(raw_table) &&
+      "Value" %in% colnames(raw_table)) {
+      cor_text <- raw_table$Value[grep("Relative Correlation", raw_table$Quality_Metrics)]
+      cor_text <- if (length(cor_text) > 0) as.character(cor_text[1]) else NA_character_
+    }
+
+    msg_rc <- if (is.na(cor_text) || cor_text == "NA") {
+      "PCC unavailable (COR = NA). Possible reason: insufficient matched features with reference dataset."
+    } else {
+      paste0("PCC plot unavailable (COR = ", cor_text, ").")
+    }
+
+    doc <- doc %>%
+      body_add_par(msg_rc, style = "Normal")
+  }
+
+  doc <- doc %>%
     body_add_par("", style = "Normal")
 
   print(doc, target = output_file)
