@@ -12,8 +12,10 @@
 #' @export
 input_data <- function(exp_path, meta_path) {
   # Load data ------------------------------------------------
-  expr <- fread(exp_path)
-  meta <- fread(meta_path)
+  # expr <- fread(exp_path)
+  # meta <- fread(meta_path)
+  expr <- read.table(exp_path, sep = ",", header = TRUE, na.strings = c("#num!", "#NUM!" , "N/A", "MISSING", "NA"), comment.char = "", check.names = FALSE)
+  meta <- read.table(meta_path, sep = ",", header = TRUE, check.names = FALSE)
 
   expr <- as.data.frame(expr)
   meta <- meta %>%
