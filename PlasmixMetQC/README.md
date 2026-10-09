@@ -1,6 +1,6 @@
 ```markdown
-# PlasmixMetaQC: Metabolomics Quality Control Toolkit
-**PlasmixMetaQC** 是专为 Plasmix 计划开发的代谢组学数据质量控制（QC）R 包。该工具基于比例（Ratio-based）定量策略，利用 Plasmix 血浆参考物质（M, Y, P, X, F）评估代谢组数据的信噪比（SNR）和与参考数据集的一致性（PCC）。
+# PlasmixMetQC: Metabolomics Quality Control Toolkit
+**PlasmixMetQC** 是专为 Plasmix 计划开发的代谢组学数据质量控制（QC）R 包。该工具基于比例（Ratio-based）定量策略，利用 Plasmix 血浆参考物质（M, Y, P, X, F）评估代谢组数据的信噪比（SNR）和与参考数据集的一致性（PCC）。
 
 该包旨在简化非靶向和靶向代谢组学数据的质控流程，支持一键生成中文 Word 报告。
 
@@ -17,7 +17,7 @@
 
 ## 📦 安装说明
 
-请确保您已安装 `devtools` 包。您可以通过以下方式安装 `PlasmixMetaQC`：
+请确保您已安装 `devtools` 包。您可以通过以下方式安装 `PlasmixMetQC`：
 
 ```r
 # 方法 1: 如果项目已上传至 GitHub (请替换您的用户名)
@@ -68,7 +68,7 @@ devtools::install_local(".")
 以下代码展示了如何从读取数据到生成报告的完整流程：
 
 ```r
-library(PlasmixMetaQC)
+library(PlasmixMetQC)
 
 # 1. 设置文件路径
 expr_file  <- "./data/expression_matrix.txt"
@@ -114,7 +114,7 @@ generate_metabo_report(
 **Q: 报错 `Could not load 'reference_dataset' from PlasmixMetQC**`
 
 * **原因**：代码中引用的包名与实际安装的包名不一致。
-* **解决**：请检查 `DESCRIPTION` 文件中的 `Package:` 字段，确保其为 `PlasmixMetaQC`，并重新安装。
+* **解决**：请检查 `DESCRIPTION` 文件中的 `Package:` 字段，确保其为 `PlasmixMetQC`，并重新安装。
 
 **Q: 警告 `Duplicates detected in Feature IDs...**`
 
