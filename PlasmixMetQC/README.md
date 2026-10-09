@@ -21,7 +21,7 @@
 
 ```r
 # 方法 1: 如果项目已上传至 GitHub (请替换您的用户名)
-# devtools::install_github("https://github.com/markx945/Plasmix_Metabolite_QC_Report/tree/main/PlasmixMetQC")
+# devtools::install_github("chinese-quartet/plasmix-met-qc-report", subdir = "PlasmixMetQC")
 
 # 方法 2: 如果您在本地项目根目录下
 devtools::install_local(".")
