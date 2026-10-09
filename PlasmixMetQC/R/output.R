@@ -7,6 +7,21 @@
 #' @export
 qc_conclusion <- function(exp_path, meta_path, output_dir = NULL, plot = TRUE) {
   # 1. Load the input data
+    # 🔧 添加输出目录检查
+    if (!is.null(output_dir)) {
+      if (!dir.exists(output_dir)) {
+        message(sprintf("📁 输出目录不存在，正在创建：%s", output_dir))
+        dir.create(output_dir, recursive = TRUE, showWarnings = FALSE)
+        
+        if (!dir.exists(output_dir)) {
+          stop(sprintf(
+            "❌ 无法创建输出目录：%s\n请检查：\n  1. 路径是否有写入权限\n  2. 路径格式是否正确",
+            output_dir
+          ))
+        }
+      }
+    }
+    
   data_list <- input_data(exp_path, meta_path)
 
   expr_dt <- data_list$expr_dt

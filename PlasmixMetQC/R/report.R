@@ -19,9 +19,19 @@ generate_metabo_report <- function(qc_result,
 
   if (is.null(report_dir)) {
     report_dir <- file.path(getwd(), "output")
-    dir.create(report_dir, showWarnings = FALSE, recursive = TRUE)
+    message(sprintf("📁 未指定报告输出目录，使用默认路径：%s", report_dir))
   }
-
+  if (!dir.exists(report_dir)) {
+    message(sprintf("📁 输出目录不存在，正在创建：%s", report_dir))
+    dir.create(report_dir, recursive = TRUE, showWarnings = FALSE)
+    
+    if (!dir.exists(report_dir)) {
+      stop(sprintf(
+        "❌ 无法创建报告输出目录：%s\n请检查：\n  1. 路径是否有写入权限\n  2. 磁盘空间是否充足",
+        report_dir
+      ))
+    }
+  }
   if (is.null(report_name)) {
     report_name <- paste0("Plasmix_Metabo_QC_Report_", format(Sys.Date(), "%Y%m%d"), ".docx")
   }

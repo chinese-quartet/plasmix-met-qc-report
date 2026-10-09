@@ -206,6 +206,17 @@ qc_cor <- function(expr_dt, meta_dt, output_dir = NULL, plot = FALSE, show_sampl
     cols_test <- which(meta_dt$sample == ts)
     cols_ref <- which(meta_dt$sample == ref_samp)
 
+    # 检查配对样本数量
+    if (length(cols_test) == 0) {
+      warning(sprintf("样本组 '%s' 没有找到任何样本，跳过此配对", ts))
+      next
+    }
+    
+    if (length(cols_ref) == 0) {
+      warning(sprintf("参考样本组 '%s' 没有找到任何样本，无法计算 RC", ref_samp))
+      next
+    }
+    
     dat_ref <- mat_linear[, cols_ref, drop = FALSE]
     dat_test <- mat_linear[, cols_test, drop = FALSE]
 
@@ -219,8 +230,13 @@ qc_cor <- function(expr_dt, meta_dt, output_dir = NULL, plot = FALSE, show_sampl
     feats_ref <- ref_dt$feature[ref_dt$sample_pair == pair_name]
     common_feats <- intersect(current_features, feats_ref)
 
-    if (length(common_feats) < 3) next
-
+    if (length(common_feats) < 3) {
+      warning(sprintf(
+        "⚠️  样本对 '%s/%s' 的有效代谢物配对数不足（共 %d 个，需要至少 3 个）",
+        ts, ref_samp, length(common_feats)
+      ))
+      next
+    }
     dat_ref <- dat_ref[common_feats, , drop = FALSE]
     dat_test <- dat_test[common_feats, , drop = FALSE]
 
@@ -287,6 +303,13 @@ qc_cor <- function(expr_dt, meta_dt, output_dir = NULL, plot = FALSE, show_sampl
         y = "Test Value"
       )
   }
-
+  if (nrow(res_all) == 0) {
+    warning(sprintf(
+      "❌ 有效配对不足！无法计算 RC 指标。\n\n当前数据情况：\n  - 参考样本组: %s（%d 个样本）\n  - 测试样本组: %s\n  - 可用代谢物数: 0\n\n可能原因：\n  1. 样本信息表中的 sample 列值与参考数据集不匹配\n  2. 表达数据中的代谢物 ID 格式与参考数据集不一致\n  3. 参考数据集中没有对应的样本配对数据",
+      ref_samp, length(which(meta_dt$sample == ref_samp)),
+      paste(test_samps, collapse = ", ")
+    ))
+    return(list(COR = NA, cor_plot = NULL))
+  }
   return(list(COR = cor_val, cor_plot = p, logfc = merged))
 }
