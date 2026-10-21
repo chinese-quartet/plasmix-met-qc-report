@@ -159,7 +159,8 @@ qc_snr <- function(expr_dt, meta_dt, output_dir = NULL, plot = TRUE) {
   return(list(SNR = snr_db, snr_plot = p))
 }
 
-#' Calculating RC
+
+#' Calculating RC with feature filtering
 #' @importFrom utils data
 #' @importFrom ggplot2 ggplot aes geom_point scale_color_manual theme_classic labs coord_fixed
 #' @export
@@ -172,26 +173,20 @@ qc_cor <- function(expr_dt, meta_dt, output_dir = NULL, plot = FALSE, show_sampl
       stop("Could not load 'reference_dataset' from PlasmixMetQC.")
     }
   )
-
   if (!exists("reference_dataset")) stop("reference_dataset not found.")
-
   ref_dt <- reference_dataset
   if (nrow(ref_dt) == 0) warning("Reference dataset is empty.")
-
-  # [修复] 处理重复行名问题
+  # 处理重复行名问题
   mat <- as.matrix(expr_dt[, -1])
-
   feat_names <- expr_dt[[1]]
   if (any(duplicated(feat_names))) {
     warning("Duplicates detected in Feature IDs during RC calculation. Making them unique.")
     feat_names <- make.unique(as.character(feat_names))
   }
-
   rownames(mat) <- feat_names
   mat <- mat[, meta_dt$library]
-
   mat_linear <- 2^mat
-
+  # 获取所有样本组
   samps <- unique(meta_dt$sample)
   ref_samp <- "P"
   if (!"P" %in% samps) {
@@ -199,14 +194,79 @@ qc_cor <- function(expr_dt, meta_dt, output_dir = NULL, plot = FALSE, show_sampl
     warning("No 'P' sample. Using ", ref_samp)
   }
   test_samps <- setdiff(samps, ref_samp)
-
+  # ========== 步骤1: CV 筛选 ==========
+  # 计算每个样本组内每个特征的 CV
+  cv_threshold <- 0.20
+  
+  calc_cv <- function(x) {
+    x <- x[!is.na(x)]
+    if (length(x) < 2) return(NA)
+    sd(x) / mean(x)
+  }
+  
+  # 存储所有样本组的 CV
+  cv_list <- list()
+  for (samp in c(ref_samp, test_samps)) {
+    cols <- which(meta_dt$sample == samp)
+    if (length(cols) == 0) next
+    
+    dat <- mat_linear[, cols, drop = FALSE]
+    cv_vals <- apply(dat, 1, calc_cv)
+    cv_list[[samp]] <- cv_vals
+  }
+  
+  # ========== 步骤2: TRC 筛选 ==========
+  # 计算每个样本组的均值
+  mean_list <- list()
+  for (samp in c(ref_samp, test_samps)) {
+    cols <- which(meta_dt$sample == samp)
+    if (length(cols) == 0) next
+    
+    dat <- mat_linear[, cols, drop = FALSE]
+    mean_list[[samp]] <- rowMeans(dat, na.rm = TRUE)
+  }
+  
+  # 定义理论 TRC 值
+  theoretical_trc <- list(
+    M = 0.5,
+    Y = 0.25,
+    X = -0.25,
+    F = -0.5
+  )
+  
+  trc_threshold <- 0.30  # 30% 偏差
+  
+  # 计算实际 TRC 并筛选
+  trc_filter <- rep(TRUE, nrow(mat_linear))
+  names(trc_filter) <- rownames(mat_linear)
+  
+  if ("M" %in% names(mean_list) && "F" %in% names(mean_list) && "P" %in% names(mean_list)) {
+    denominator <- mean_list[["M"]] - mean_list[["F"]]
+    
+    for (samp in test_samps) {
+      if (!samp %in% names(theoretical_trc)) next
+      if (!samp %in% names(mean_list)) next
+      
+      numerator <- mean_list[[samp]] - mean_list[["P"]]
+      trc_actual <- numerator / denominator
+      trc_theory <- theoretical_trc[[samp]]
+      
+      # 计算偏差百分比
+      trc_deviation <- abs(trc_actual - trc_theory) / abs(trc_theory)
+      
+      # 标记不符合的特征
+      trc_filter <- trc_filter & (trc_deviation <= trc_threshold | is.na(trc_deviation))
+    }
+  } else {
+    warning("Missing M, F, or P samples for TRC calculation. Skipping TRC filter.")
+  }
+  
+  # ========== 步骤3: 计算 RC（仅对筛选后的特征）==========
   res_all <- data.frame()
-
+  
   for (ts in test_samps) {
     cols_test <- which(meta_dt$sample == ts)
     cols_ref <- which(meta_dt$sample == ref_samp)
-
-    # 检查配对样本数量
     if (length(cols_test) == 0) {
       warning(sprintf("样本组 '%s' 没有找到任何样本，跳过此配对", ts))
       next
@@ -219,76 +279,79 @@ qc_cor <- function(expr_dt, meta_dt, output_dir = NULL, plot = FALSE, show_sampl
     
     dat_ref <- mat_linear[, cols_ref, drop = FALSE]
     dat_test <- mat_linear[, cols_test, drop = FALSE]
-
-    count_ref <- rowSums(!is.na(dat_ref))
-    count_test <- rowSums(!is.na(dat_test))
-    keep_rows <- (count_ref > 0) & (count_test > 0)
-
-    current_features <- rownames(dat_ref)
-
+    # 应用 CV 筛选：该配对的两组 CV 都要 <= 20%
+    cv_ref <- cv_list[[ref_samp]]
+    cv_test <- cv_list[[ts]]
+    
+    cv_pass <- (cv_ref <= cv_threshold | is.na(cv_ref)) & 
+      (cv_test <= cv_threshold | is.na(cv_test))
+    
+    # 应用 TRC 筛选
+    pass_filter <- cv_pass & trc_filter
+    
+    # 筛选特征
+    current_features <- rownames(dat_ref)[pass_filter]
+    
     pair_name <- paste(ts, ref_samp, sep = "/")
     feats_ref <- ref_dt$feature[ref_dt$sample_pair == pair_name]
     common_feats <- intersect(current_features, feats_ref)
-
-    if (length(common_feats) < 3) {
-      warning(sprintf(
-        "⚠️  样本对 '%s/%s' 的有效代谢物配对数不足（共 %d 个，需要至少 3 个）",
-        ts, ref_samp, length(common_feats)
-      ))
-      next
+    # 移除单个样本对的检查，累计到 res_all 中
+    if (length(common_feats) > 0) {
+      dat_ref <- dat_ref[common_feats, , drop = FALSE]
+      dat_test <- dat_test[common_feats, , drop = FALSE]
+      mean_ref <- rowMeans(dat_ref, na.rm = TRUE)
+      mean_test <- rowMeans(dat_test, na.rm = TRUE)
+      ratio_val <- mean_test / mean_ref
+      df_tmp <- data.frame(
+        Feature = common_feats,
+        Sample.Pair = pair_name,
+        logFC.Test = ratio_val
+      )
+      res_all <- rbind(res_all, df_tmp)
+    } else {
+      warning(sprintf("样本对 '%s/%s' 筛选后没有有效特征", ts, ref_samp))
     }
-    dat_ref <- dat_ref[common_feats, , drop = FALSE]
-    dat_test <- dat_test[common_feats, , drop = FALSE]
-
-    mean_ref <- rowMeans(dat_ref, na.rm = TRUE)
-    mean_test <- rowMeans(dat_test, na.rm = TRUE)
-
-    ratio_val <- mean_test / mean_ref
-
-    df_tmp <- data.frame(
-      Feature = common_feats,
-      Sample.Pair = pair_name,
-      logFC.Test = ratio_val
-    )
-
-    res_all <- rbind(res_all, df_tmp)
   }
-
-  if (nrow(res_all) == 0) {
+  # 在这里统一检查累计特征数
+  if (nrow(res_all) < 3) {
+    warning(sprintf(
+      "❌ 筛选后累计有效特征不足！无法计算 RC 指标。\n\n当前数据情况：\n  - 参考样本组: %s（%d 个样本）\n  - 测试样本组: %s\n  - 筛选后累计可用特征数: %d（需要至少 3 个）\n\n可能原因：\n  1. CV 阈值 (%.0f%%) 过严格\n  2. TRC 偏差阈值 (%.0f%%) 过严格\n  3. 样本信息表中的 sample 列值与参考数据集不匹配",
+      ref_samp, length(which(meta_dt$sample == ref_samp)),
+      paste(test_samps, collapse = ", "),
+      nrow(res_all),
+      cv_threshold * 100, trc_threshold * 100
+    ))
     return(list(COR = NA, cor_plot = NULL))
   }
-
   res_all$key <- paste(res_all$Feature, res_all$Sample.Pair)
   ref_dt$key <- paste(ref_dt$feature, ref_dt$sample_pair)
-
   merged <- merge(res_all, ref_dt, by = "key")
-
   cor_val <- cor(merged$logFC.Test, merged$assigned_value, use = "complete.obs")
   cor_val <- round(cor_val, 3)
-
+  # 输出筛选统计
+  if (show_sample_pairs) {
+    cat("\n=== Feature Filtering Summary ===\n")
+    cat("CV threshold:", cv_threshold * 100, "%\n")
+    cat("TRC deviation threshold:", trc_threshold * 100, "%\n")
+    cat("Features passing filters:", length(which(trc_filter)), "/", nrow(mat_linear), "\n")
+    cat("Total valid feature-pair combinations:", nrow(res_all), "\n")
+    cat("Final features used for RC:", nrow(merged), "\n\n")
+  }
   p <- NULL
   if (plot) {
     unique_pairs <- unique(merged$Sample.Pair)
-    # numerators <- unique(sapply(strsplit(as.character(unique_pairs), "/"), `[`, 1))
-    # sample_cols_base <- get_sample_colors(numerators)
-    # 1. 提取所有涉及的分子样本 (Test Samples)
     numerators <- unique(sapply(strsplit(as.character(unique_pairs), "/"), `[`, 1))
-
-    # 2. 获取这些样本的标准颜色
-    sample_cols_base <- get_sample_colors(numerators) # named vector
-
-    # 3. 构建 Pair -> Color 的映射向量
+    sample_cols_base <- get_sample_colors(numerators)
+    
     pair_colors_vec <- c()
     for (pair in unique_pairs) {
       num <- strsplit(as.character(pair), "/")[[1]][1]
-      # 安全查找：如果 num 存在于 sample_cols_base 的名字中
       if (num %in% names(sample_cols_base)) {
         pair_colors_vec[pair] <- sample_cols_base[num]
       } else {
         pair_colors_vec[pair] <- "gray"
       }
     }
-
     p <- ggplot(merged, aes(x = assigned_value, y = logFC.Test)) +
       geom_abline(intercept = 0, slope = 1, linetype = "dashed", color = "gray50") +
       geom_point(aes(color = Sample.Pair), alpha = 0.6, size = 2) +
@@ -303,13 +366,10 @@ qc_cor <- function(expr_dt, meta_dt, output_dir = NULL, plot = FALSE, show_sampl
         y = "Test Value"
       )
   }
-  if (nrow(res_all) == 0) {
-    warning(sprintf(
-      "❌ 有效配对不足！无法计算 RC 指标。\n\n当前数据情况：\n  - 参考样本组: %s（%d 个样本）\n  - 测试样本组: %s\n  - 可用代谢物数: 0\n\n可能原因：\n  1. 样本信息表中的 sample 列值与参考数据集不匹配\n  2. 表达数据中的代谢物 ID 格式与参考数据集不一致\n  3. 参考数据集中没有对应的样本配对数据",
-      ref_samp, length(which(meta_dt$sample == ref_samp)),
-      paste(test_samps, collapse = ", ")
-    ))
-    return(list(COR = NA, cor_plot = NULL))
+  if (!is.null(output_dir)) {
+    if (!dir.exists(output_dir)) dir.create(output_dir, recursive = TRUE)
+    if (plot) ggsave(file.path(output_dir, "rc_plot.png"), p, width = 6, height = 5)
+    write.table(merged, file.path(output_dir, "rc_table.tsv"), sep = "\t", quote = FALSE, row.names = FALSE)
   }
   return(list(COR = cor_val, cor_plot = p, logfc = merged))
 }
